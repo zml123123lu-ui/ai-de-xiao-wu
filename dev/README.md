@@ -40,6 +40,7 @@ bash dev/verify-all.sh
 | `supabase-sql.sh` | 通过 Supabase 管理 API 检查/执行 SQL（数据库直连域名被阻断时的唯一通道）。 |
 | `sync-to-github.sh` | 走 GitHub API 把当前代码同步到远端（国内 git push 常被掐）；空仓库会自动播种。 |
 | `push-to-github.sh` | 走 git push 的常规推送助手（网络允许时用）。 |
+| `verify-longtext.mjs` | 超长无空格文本（长链接）在 390/320 宽度下不撑破布局；覆盖列表、详情、通知等页面。 |
 | `verify-edge.mjs` | 输入边界与异常路径：搜索特殊字符/超长/空、超长或非法正文被服务端拒绝且不写库、未登录写入被挡回。 |
 | `verify-notifications.mjs` | 通知中心：「全部标为已读」后界面与后端都清空（轮询后端断言最终状态）。 |
 | `verify-daily.mjs` | 每日状态：写下 → 再改（更新而非新增）→ 翻看历史日期（只读）。 |
