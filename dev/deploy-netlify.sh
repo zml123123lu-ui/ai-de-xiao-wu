@@ -78,9 +78,14 @@ done
 rm -f /tmp/nf-env.json /tmp/nf-env-out.json
 
 # 3) 关联仓库并触发部署
+# 注意：repo.dir 是"基准目录"（monorepo 用），不是发布目录。
+# 发布目录交给 Netlify 的 Next.js 零配置检测，避免写错反而构建失败。
 python3 -c "
 import json,sys
-json.dump({'repo': {'provider': 'github', 'repo': sys.argv[1], 'branch': 'main', 'cmd': 'pnpm build', 'dir': '.next', 'private': False}}, open('/tmp/nf-site.json','w'))
+json.dump({
+    'repo': {'provider': 'github', 'repo': sys.argv[1], 'branch': 'main', 'private': False},
+    'build_settings': {'cmd': 'pnpm build', 'dir': ''},
+}, open('/tmp/nf-site.json','w'))
 " "zml123123lu-ui/ai-de-xiao-wu"
 curl -sS -m 40 -X PATCH "${AUTH[@]}" -H "Content-Type: application/json" --data @/tmp/nf-site.json "$API/sites/$SITE_ID" > /dev/null
 rm -f /tmp/nf-site.json

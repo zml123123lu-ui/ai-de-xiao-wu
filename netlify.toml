@@ -1,11 +1,13 @@
-# Netlify 部署配置。与 Render 方案等价：应用自己转发 Supabase（免费数据库域名国内不通）。
+# Netlify 部署配置（保持最小）。
+#
+# 官方文档写得很明确：Next.js 在 Netlify 上是**零配置**支持
+# （"Netlify supports all major Next.js features with zero configuration,
+#   via our open-source OpenNext adapter"）。
+# 因此这里**故意不**声明 @netlify/plugin-nextjs：
+# 显式 pin 插件会退出自动更新（文档原话："You'll be opting out of automatic updates"），
+# 还会多一个必须装进 package.json 的依赖——而本机 npm registry 不可达。
 [build]
   command = "pnpm build"
-  publish = ".next"
 
 [build.environment]
   NODE_VERSION = "20.19.0"
-
-# Next.js 官方运行时（Netlify 会自动检测；这里写明确一点）
-[[plugins]]
-  package = "@netlify/plugin-nextjs"
