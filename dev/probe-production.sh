@@ -24,7 +24,13 @@ probe() {  # $1=路径 $2=说明
   local out code
   out=$(curl -sS -m 20 -o /tmp/probe-body.json -w "%{http_code}" "${headers[@]}" "$BASE/supabase/rest/v1/$1" 2>/dev/null)
   code="$out"
-  local body; body=$(head -c 160 /tmp/probe-body.json 2>/dev/null | tr -d '\n')
+  local body; body=$(head -c 400 /tmp/probe-body.json 2>/dev/null | tr -d '\n')
+  # 被 Netlify 的访问保护（Edge Access）挡住时也会返回 401，但那是登录页而不是数据库应答，
+  # 必须识别出来——否则会把"站点被保护"误报成"表存在"（这次就被骗过一次）。
+  if echo "$body" | grep -qi "edge-access\|Login Redirect"; then
+    echo "  ✗ $2 —— 站点被 Netlify 访问保护挡住，测不到数据库（关闭站点级 sso_login 后重试）"
+    return 1
+  fi
   if [ "$code" = "400" ] && echo "$body" | grep -q "does not exist"; then
     echo "  ✗ $2 —— 列/表不存在：$(echo "$body" | grep -oE 'column [a-z_.]+ does not exist|relation \"[a-z_.]+\" does not exist' | head -1)"
     return 1

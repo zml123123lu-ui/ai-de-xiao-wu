@@ -49,47 +49,71 @@ EOF
   exit 0
 fi
 
-# 1) 建站点（若已存在则复用）
-SITE_ID=$(curl -sS -m 40 "${AUTH[@]}" "$API/sites?name=$SITE_NAME" | python3 -c "
+# 1) 建站点：创建时就带上仓库关联（比先建站再 PATCH 更可靠）
+ACCOUNT_ID=$(curl -sS -m 25 "${AUTH[@]}" "$API/accounts" | python3 -c "import json,sys; print(json.load(sys.stdin)[0]['id'])")
+echo "  账号 ID: $ACCOUNT_ID"
+
+SITE_ID=$(curl -sS -m 25 "${AUTH[@]}" "$API/sites?name=$SITE_NAME" | python3 -c "
 import json,sys
-try: d=json.load(sys.stdin)
-except Exception: print(''); raise SystemExit
-print(d[0]['id'] if isinstance(d, list) and d else (d.get('id') or ''))
+data=json.load(sys.stdin)
+print(data[0]['id'] if isinstance(data, list) and data else '')
 ")
 if [ -z "$SITE_ID" ]; then
-  SITE_ID=$(curl -sS -m 40 -X POST "${AUTH[@]}" -H "Content-Type: application/json" \
-    -d "{\"name\":\"$SITE_NAME\"}" "$API/sites" | python3 -c "
+  python3 - "$SITE_NAME" "zml123123lu-ui/ai-de-xiao-wu" <<'PYJSON' > /tmp/nf-create.json
+import json, sys
+name, slug = sys.argv[1], sys.argv[2]
+json.dump({
+    "name": name,
+    "repo": {"provider": "github", "repo": slug, "branch": "main", "private": False},
+    "build_settings": {"cmd": "pnpm build", "dir": ""},
+}, open("/tmp/nf-create.json", "w"))
+PYJSON
+  RESP=$(curl -sS -m 60 -X POST "${AUTH[@]}" -H "Content-Type: application/json" --data @/tmp/nf-create.json "$API/sites")
+  SITE_ID=$(echo "$RESP" | python3 -c "
 import json,sys
-d=json.load(sys.stdin); print(d.get('id',''))
+raw=sys.stdin.read()
+try: d=json.loads(raw)
+except Exception: print(''); raise SystemExit
+if d.get('message'): import sys as s; print('', end=''); s.stderr.write('  建站报错: ' + str(d.get('message')) + '\n')
+print(d.get('id',''))
 ")
+  rm -f /tmp/nf-create.json
 fi
-[ -n "$SITE_ID" ] || { echo "❌ 建站失败（站点名可能被占用，试试 SITE_NAME=别的名字）"; exit 1; }
+[ -n "$SITE_ID" ] || { echo "❌ 建站失败"; exit 1; }
 echo "✓ 站点 ID: $SITE_ID"
 
-# 2) 环境变量
-for pair in "NODE_VERSION=20.19.0" "NEXT_PUBLIC_SUPABASE_URL=${SITE_URL}/supabase" "SUPABASE_URL=${SITE_URL}/supabase" \
-            "NEXT_PUBLIC_SUPABASE_ANON_KEY=${SUPA_KEY}" "SUPABASE_UPSTREAM_URL=${SUPA_URL}" "SUPABASE_RELAY_TOKEN=${RELAY_TOKEN}"; do
-  key="${pair%%=*}"; value="${pair#*=}"
-  python3 -c "import json,sys; print(json.dumps({'key': sys.argv[1], 'values': [{'value': sys.argv[2], 'context': 'all'}]}))" "$key" "$value" > /tmp/nf-env.json
-  code=$(curl -sS -m 30 -o /tmp/nf-env-out.json -w "%{http_code}" -X POST "${AUTH[@]}" -H "Content-Type: application/json" \
-    --data @/tmp/nf-env.json "$API/accounts/$(curl -sS -m 20 "${AUTH[@]}" "$API/accounts" | python3 -c "import json,sys; print(json.load(sys.stdin)[0]['id'])")/env?site_id=$SITE_ID")
-  [ "$code" = "200" ] || [ "$code" = "201" ] && echo "  ✓ $key" || { echo "  ✗ $key（HTTP $code）"; head -c 200 /tmp/nf-env-out.json; echo; }
-done
+# 2) 环境变量：Netlify 的接口要的是**数组**（每项 key + values[{value, context}]）
+python3 - "$SITE_URL" "$SUPA_KEY" "$SUPA_URL" "$RELAY_TOKEN" <<'PYJSON' > /tmp/nf-env.json
+import json, sys
+site, key, upstream, token = sys.argv[1:5]
+vars_ = [
+    ("NODE_VERSION", "20.19.0"),
+    ("NEXT_PUBLIC_SUPABASE_URL", f"{site}/supabase"),
+    ("SUPABASE_URL", f"{site}/supabase"),
+    ("NEXT_PUBLIC_SUPABASE_ANON_KEY", key),
+    ("SUPABASE_UPSTREAM_URL", upstream),
+    ("SUPABASE_RELAY_TOKEN", token),
+]
+json.dump([{"key": k, "values": [{"value": v, "context": "all"}]} for k, v in vars_], open("/tmp/nf-env.json", "w"))
+PYJSON
+code=$(curl -sS -m 40 -o /tmp/nf-env-out.json -w "%{http_code}" -X POST "${AUTH[@]}" -H "Content-Type: application/json" \
+  --data @/tmp/nf-env.json "$API/accounts/$ACCOUNT_ID/env?site_id=$SITE_ID")
+if [ "$code" = "200" ] || [ "$code" = "201" ]; then
+  echo "✓ 六个环境变量已设置"
+else
+  echo "⚠ 环境变量提交返回 HTTP $code，响应："; head -c 300 /tmp/nf-env-out.json; echo
+fi
 rm -f /tmp/nf-env.json /tmp/nf-env-out.json
 
-# 3) 关联仓库并触发部署
-# 注意：repo.dir 是"基准目录"（monorepo 用），不是发布目录。
-# 发布目录交给 Netlify 的 Next.js 零配置检测，避免写错反而构建失败。
+# 3) 触发一次构建（若站点是刚建的，Netlify 通常已经自动开始；这里兜底再触发一次）
+curl -sS -m 30 -X POST "${AUTH[@]}" -H "Content-Type: application/json" -d '{}' "$API/sites/$SITE_ID/builds" > /tmp/nf-build.json 2>&1
 python3 -c "
-import json,sys
-json.dump({
-    'repo': {'provider': 'github', 'repo': sys.argv[1], 'branch': 'main', 'private': False},
-    'build_settings': {'cmd': 'pnpm build', 'dir': ''},
-}, open('/tmp/nf-site.json','w'))
-" "zml123123lu-ui/ai-de-xiao-wu"
-curl -sS -m 40 -X PATCH "${AUTH[@]}" -H "Content-Type: application/json" --data @/tmp/nf-site.json "$API/sites/$SITE_ID" > /dev/null
-rm -f /tmp/nf-site.json
-echo "✓ 已关联仓库并触发部署（Netlify 侧开始构建）"
+import json
+try: d=json.load(open('/tmp/nf-build.json'))
+except Exception: print('  （构建触发返回无法解析，通常不影响）'); raise SystemExit
+print('  构建 ID:', d.get('id',''), ' 状态:', d.get('state',''))
+" 2>/dev/null
+rm -f /tmp/nf-build.json
 
 echo
 echo "=== 等待上线（首次构建约 2-4 分钟）==="

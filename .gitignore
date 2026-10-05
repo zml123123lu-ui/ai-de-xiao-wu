@@ -13,3 +13,6 @@ test-results/
 .DS_Store
 .vercel
 dev/shots/
+
+# Netlify CLI 本地状态
+.netlify/
