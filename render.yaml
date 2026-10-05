@@ -1,0 +1,28 @@
+# 零成本部署蓝图（Render 免费实例）。用法见 docs/deploy-cn.md「零成本路线」。
+# 一个实例同时承担：跑应用 + 转发 Supabase（不需要买域名、不需要备案）。
+services:
+  - type: web
+    name: ai-de-xiao-wu            # 这个name决定域名，必须全局唯一；改了就同步改下面两个 URL
+    runtime: node
+    plan: free
+    # 新加坡离国内最近；注意这个值创建后不可修改（要改只能删了重建）。
+    # 若免费实例不支持该区域、创建时报错，就删掉这一行改用默认 oregon。
+    region: singapore
+    # 构建命令做了两层兜底：corepack 拿不到 packageManager 指定版本时用 npm 装 pnpm；
+    # 锁文件版本与 pnpm 不一致时退回普通 install（避免因此卡住首次部署）。
+    buildCommand: (corepack enable || true) && (pnpm --version >/dev/null 2>&1 || npm i -g pnpm) && (pnpm install --frozen-lockfile || pnpm install) && pnpm build
+    startCommand: pnpm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "20.19.0"
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        value: https://ai-de-xiao-wu.onrender.com/supabase
+      - key: SUPABASE_URL
+        value: https://ai-de-xiao-wu.onrender.com/supabase
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        sync: false                # 在控制台填：Supabase 项目的 anon key
+      - key: SUPABASE_UPSTREAM_URL
+        sync: false                # 在控制台填：https://<项目>.supabase.co
+      - key: SUPABASE_RELAY_TOKEN
+        generateValue: true        # 自动生成，应用与转发器读同一个值

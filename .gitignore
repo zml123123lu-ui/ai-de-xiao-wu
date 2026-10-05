@@ -1,0 +1,15 @@
+node_modules/
+.next/
+coverage/
+playwright-report/
+test-results/
+.pnpm-store/
+*.tsbuildinfo
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+.DS_Store
+.vercel
+dev/shots/
