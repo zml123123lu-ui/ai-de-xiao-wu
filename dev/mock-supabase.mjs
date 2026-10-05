@@ -19,6 +19,17 @@ const SINGULAR = { discussions: "discussion", letters: "letter", notifications: 
 
 /** 各表的列默认值——真实 Postgres 有 default，假后端必须照做，
  *  否则 status 之类的字段会是 undefined，页面逻辑会走出与线上不同的分支。 */
+/** 各表的真实列名（照 supabase/migrations 抄）。
+ *  真 PostgREST 对未知列返回 400、未知表返回 404；假后端以前一律 200，
+ *  于是"少跑了一个迁移"这类问题在本地永远测不出来。 */
+const COLUMNS = {
+  profiles: ["id", "display_name", "avatar_color", "created_at"],
+  discussions: ["id", "author_id", "title", "body", "status", "created_at", "updated_at", "edited_at", "deleted_at"],
+  discussion_replies: ["id", "discussion_id", "author_id", "body", "created_at", "edited_at", "deleted_at"],
+  letters: ["id", "sender_id", "recipient_id", "title", "body", "status", "created_at", "updated_at", "sent_at", "read_at", "reply_to_id"],
+  daily_statuses: ["id", "author_id", "status_date", "mood", "body", "created_at", "updated_at"],
+  notifications: ["id", "recipient_id", "actor_id", "type", "resource_id", "created_at", "read_at"],
+};
 const DEFAULTS = {
   profiles: { avatar_color: "#9e6b4f" },
   discussions: { status: "open", edited_at: null, deleted_at: null },
@@ -33,6 +44,15 @@ const withDefaults = (table, item) => ({ ...(DEFAULTS[table] ?? {}), ...item });
 // 而 fixtures 里省略的字段会是 undefined——.is("read_at", null) 这类过滤就匹配不到。
 for (const [table, rows] of Object.entries(db)) {
   if (Array.isArray(rows)) db[table] = rows.map((row) => withDefaults(table, row));
+}
+
+// 演练"第三个迁移没跑"的情形：MOCK_WITHOUT_REPLY_MIGRATION=1
+// 必须把列从三处都抽掉（列定义、默认值、已有数据），否则"任何一行出现过就算已知"
+// 的动态兜底会让它看起来仍然存在。
+if (process.env.MOCK_WITHOUT_REPLY_MIGRATION === "1") {
+  COLUMNS.letters = COLUMNS.letters.filter((c) => c !== "reply_to_id");
+  delete DEFAULTS.letters.reply_to_id;
+  for (const row of db.letters ?? []) delete row.reply_to_id;
 }
 
 const b64u = (o) => Buffer.from(JSON.stringify(o)).toString("base64url");
@@ -244,6 +264,49 @@ const server = createServer(async (req, res) => {
   const table = route[1];
   const params = [...url.searchParams.entries()];
   const select = url.searchParams.get("select") ?? "*";
+
+  // 未知表 → 404（真 PostgREST 行为）
+  if (!COLUMNS[table]) {
+    log(`404 未知表 ${table}`);
+    return send(404, { code: "42P01", message: `relation \"public.${table}\" does not exist` });
+  }
+
+  /** 只校验"裸列名"；`*`、嵌入资源（author:profiles!fk(...)）、函数一律跳过，避免误杀 */
+  const bareColumn = (name) => /^[a-z_][a-z0-9_]*$/.test(name);
+  const isKnownColumn = (key) =>
+    COLUMNS[table].includes(key) ||
+    (DEFAULTS[table] && key in DEFAULTS[table]) ||
+    rowsOf(table).some((row) => key in row); // 动态兜底：任何一行出现过就认
+  /** 返回错误描述对象，或 null（不要直接在这里 send，否则调用方无法正确 return） */
+  const columnError = (key) => (isKnownColumn(key) ? null : { code: "42703", message: `column ${table}.${key} does not exist` });
+
+  // 只校验**括号外**的顶层列名。嵌入资源写成 `alias:table!fk(列1,列2)`，
+  // 里面的列属于另一张表——按逗号硬切会把它们误当成当前表的列（踩过这个坑）。
+  const topLevelSelects = [];
+  {
+    let depth = 0;
+    let current = "";
+    for (const ch of select) {
+      if (ch === "(") depth += 1;
+      else if (ch === ")") depth = Math.max(0, depth - 1);
+      if (ch === "," && depth === 0) { topLevelSelects.push(current); current = ""; continue; }
+      current += ch;
+    }
+    if (current) topLevelSelects.push(current);
+  }
+  for (const raw of topLevelSelects) {
+    const name = raw.trim();
+    if (name.includes(":") || !bareColumn(name)) continue; // 嵌入资源与 * 跳过
+    const err = columnError(name);
+    if (err) { log(`400 未知列 ${name}`); return send(400, err); }
+  }
+  // 过滤条件里的裸列名（or/and 这类组合表达式与保留字跳过）
+  const RESERVED = new Set(["select", "order", "limit", "offset", "on_conflict", "or", "and", "columns"]);
+  for (const [key] of params) {
+    if (RESERVED.has(key) || !bareColumn(key)) continue;
+    const err = columnError(key);
+    if (err) { log(`400 未知列 ${key}`); return send(400, err); }
+  }
   const wantsObject = String(req.headers.accept ?? "").includes("vnd.pgrst.object+json");
   const prefer = String(req.headers.prefer ?? "");
   const representation = prefer.includes("return=representation");
