@@ -1,0 +1,11 @@
+# Netlify 部署配置。与 Render 方案等价：应用自己转发 Supabase（免费数据库域名国内不通）。
+[build]
+  command = "pnpm build"
+  publish = ".next"
+
+[build.environment]
+  NODE_VERSION = "20.19.0"
+
+# Next.js 官方运行时（Netlify 会自动检测；这里写明确一点）
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
