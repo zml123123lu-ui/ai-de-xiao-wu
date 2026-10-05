@@ -36,6 +36,8 @@ bash dev/verify-all.sh
 | `screenshot.mjs` | 桌面（1440）与移动（390）两个视口，把 13 个页面截到 `dev/shots/`，同时报告横向溢出和控制台报错。 |
 | `verify-save.mjs` | 回归检查：保存草稿等表单提交后必须真正发生跳转（防止自动刷新顶掉 redirect）。 |
 | `verify-auth.mjs` | 账号与权限边界：密码错误提示、匿名被拦、**非成员账号必须拿不到任何内容**。 |
+| `deploy-render.sh` | 用 Render API 建服务并等上线（`--dry-run` 只看会提交什么）；区域/计划/命令与 render.yaml 一致。 |
+| `supabase-sql.sh` | 通过 Supabase 管理 API 检查/执行 SQL（数据库直连域名被阻断时的唯一通道）。 |
 | `sync-to-github.sh` | 走 GitHub API 把当前代码同步到远端（国内 git push 常被掐）；空仓库会自动播种。 |
 | `push-to-github.sh` | 走 git push 的常规推送助手（网络允许时用）。 |
 | `verify-edge.mjs` | 输入边界与异常路径：搜索特殊字符/超长/空、超长或非法正文被服务端拒绝且不写库、未登录写入被挡回。 |

@@ -61,7 +61,8 @@ BASE_URL="$BASE" node dev/check-contrast-live.mjs | tail -4 || FAIL=1
 echo; echo "—— 20/22 零成本部署路径（自带转发器）——"
 MOCK_URL=http://127.0.0.1:54321 bash dev/verify-relay.sh | tail -8 || FAIL=1
 echo; echo "—— 21/22 布局溢出与未定义样式 ——"
-BASE_URL="$BASE" node dev/diagnose.mjs /today /discussions /letters /notifications 2>&1 | grep -E "^###|越界元素|⚠ 未定义"
+BASE_URL="$BASE" STRICT=1 node dev/diagnose.mjs /today /discussions /letters /notifications 2>&1 | grep -E "^###|越界元素|⚠ 未定义|✅ 各宽度|❌ 发现" || FAIL=1
+[ "${PIPESTATUS[0]}" = "0" ] || FAIL=1
 echo; echo "—— 22/22 截图 ——"
 BASE_URL="$BASE" node dev/screenshot.mjs 2>&1 | grep -E "控制台报错|溢出=[1-9]" || echo "  无溢出、无控制台报错"
 BASE_URL="$BASE" node dev/screenshot.mjs 2>&1 | grep -cE "^[0-9]{3} " | xargs -I{} echo "  完成 {} 张截图（含暗色）"

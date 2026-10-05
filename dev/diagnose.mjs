@@ -6,7 +6,10 @@ const paths = process.argv.slice(2);
 const targets = paths.length ? paths : ["/today", "/discussions", "/letters"];
 
 const browser = await chromium.launch();
-for (const width of [1440, 390]) {
+// 覆盖真实机型宽度：桌面 1440、主流手机 390/360（安卓常见）、老机型 320（iPhone SE 一代）
+const STRICT = process.env.STRICT === "1";
+let problems = 0;
+for (const width of [1440, 390, 360, 320]) {
   const context = await browser.newContext({ viewport: { width, height: 900 }, timezoneId: "Asia/Shanghai", locale: "zh-CN" });
   const page = await context.newPage();
   await page.goto(`${BASE}/login`, { waitUntil: "networkidle" });
@@ -48,9 +51,18 @@ for (const width of [1440, 390]) {
     });
     console.log(`\n### ${path}  @${width}px  视口=${info.vw} 文档宽=${info.scrollWidth} 溢出=${info.scrollWidth - info.vw}px`);
     if (!info.offenders.length) console.log("  无越界元素");
+    // 只有横向溢出才算故障。未定义类只提示——状态类（如 normal）和
+    // 只在媒体查询里定义的类（如 icon-wrap）都会被扫成"未定义"，属于误报。
+    if (info.scrollWidth > info.vw) problems += 1;
     for (const o of info.offenders) console.log(`  <${o.tag} class="${o.cls}"> left=${o.left} right=${o.right} w=${o.w} "${o.text}"`);
     if (info.unstyled?.length) console.log(`  ⚠ 未定义样式的类: ${info.unstyled.join(" ")}`);
   }
   await context.close();
 }
 await browser.close();
+if (problems && STRICT) {
+  console.log(`\n❌ 发现 ${problems} 处布局问题（严格模式）`);
+  process.exitCode = 1;
+} else if (!problems) {
+  console.log("\n✅ 1440/390/360/320 四种宽度下都没有横向溢出");
+}
