@@ -16,22 +16,23 @@ const WEEKDAYS = ["日", "一", "二", "三", "四", "五", "六"];
 export default async function TodayPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const params = await searchParams;
   const { supabase, user, profile } = await requireUser();
-  const partner = await getPartner(user.id);
   const today = getShanghaiDate();
   const selectedDate = isValidShanghaiDate(params.date ?? "") ? params.date! : today;
-  const { data } = await supabase.from("daily_statuses").select("*, author:profiles!daily_statuses_author_id_fkey(id, display_name, avatar_color)").eq("status_date", selectedDate);
-  const statuses = (data ?? []) as DailyStatus[];
+  const weekStart = shiftDate(selectedDate, -6);
+
+  const partner = await getPartner(user.id);
+  // 一次查询同时取回"这一周"（含当天）：比"当天 + 一周"两次查询少一趟跨洋往返
+  // （每次约 230ms）。仍然是串行——并行会让免刷新更新失灵。
+  const { data: weekRows } = await supabase
+    .from("daily_statuses")
+    .select("*, author:profiles!daily_statuses_author_id_fkey(id, display_name, avatar_color)")
+    .gte("status_date", weekStart)
+    .lte("status_date", selectedDate);
+  const week = (weekRows ?? []) as DailyStatus[];
+  const statuses = week.filter((row) => row.status_date === selectedDate);
   const mine = statuses.find((status) => status.author_id === user.id);
   const theirs = statuses.find((status) => status.author_id !== user.id);
   const isToday = selectedDate === today;
-
-  const weekStart = shiftDate(selectedDate, -6);
-  const { data: weekRows } = await supabase
-    .from("daily_statuses")
-    .select("author_id, status_date, mood")
-    .gte("status_date", weekStart)
-    .lte("status_date", selectedDate);
-  const week = (weekRows ?? []) as { author_id: string; status_date: string; mood: string }[];
   const days = Array.from({ length: 7 }, (_, index) => shiftDate(weekStart, index));
 
   return <div className="page narrow-page">

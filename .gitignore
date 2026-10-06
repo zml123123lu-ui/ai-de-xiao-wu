@@ -16,3 +16,4 @@ dev/shots/
 
 # Netlify CLI 本地状态
 .netlify/
+.next 2/

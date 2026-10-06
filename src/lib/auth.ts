@@ -7,13 +7,12 @@ export const requireUser = cache(async () => {
   if (!hasSupabaseConfig()) redirect("/login?setup=1");
   const supabase = await createClient();
 
-  // 这里刻意用 getSession() 而不是 getUser()：后者每次都会向 Auth 服务发一趟
-  // 网络请求。中间件已经在每个请求上用 getUser() 验证过会话（并顺带刷新令牌），
-  // 页面内不必再验一次——而首页会预取十几个路由，重复验证实测能累加到 16 次往返。
-  // 安全性不受影响：伪造的会话过不了中间件那一关；即便绕过，
-  // 真正的数据访问仍然由 RLS 按 JWT 把关。
-  const { data } = await supabase.auth.getSession();
-  const user = data.session?.user;
+  // 注意：这里必须用 getUser()。曾经为了省一次网络往返改成 getSession()，
+  // 结果"免刷新更新"失灵——页面里那一段服务端数据不再随 router.refresh() 更新
+  // （后端明明已返回新内容，界面却一直停在旧内容）。原因与 Next 对"用了哪些
+  // 动态 API"的判定有关，不再冒这个险。
+  const { data } = await supabase.auth.getUser();
+  const user = data.user;
   if (!user) redirect("/login");
 
   const { data: profile } = await supabase

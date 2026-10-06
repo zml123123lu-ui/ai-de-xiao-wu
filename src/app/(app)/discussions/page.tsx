@@ -25,17 +25,18 @@ export default async function DiscussionsPage({ searchParams }: { searchParams: 
     const query = supabase.from("discussions").select("*", { count: "exact", head: true });
     return status ? query.eq("status", status) : query;
   };
-  const [allCount, openCount, closedCount] = await Promise.all([countOf(), countOf("open"), countOf("closed")]);
-  const counts = { all: allCount.count ?? 0, open: openCount.count ?? 0, closed: closedCount.count ?? 0 };
-
   const from = (page - 1) * PAGE_SIZE;
-  let query = supabase
+  let listQuery = supabase
     .from("discussions")
     .select("*, author:profiles!discussions_author_id_fkey(id, display_name, avatar_color), discussion_replies(count)", { count: "exact" })
     .order("updated_at", { ascending: false })
     .range(from, from + PAGE_SIZE - 1);
-  if (active !== "all") query = query.eq("status", active);
-  const { data, count, error } = await query;
+  if (active !== "all") listQuery = listQuery.eq("status", active);
+
+  // 注意：保持串行。并行会让"免刷新更新"失灵（见 today 页的说明）。
+  const [allCount, openCount, closedCount] = await Promise.all([countOf(), countOf("open"), countOf("closed")]);
+  const counts = { all: allCount.count ?? 0, open: openCount.count ?? 0, closed: closedCount.count ?? 0 };
+  const { data, count, error } = await listQuery;
   if (error) {
     throw new Error(`无法读取问题列表：${error.message}`);
   }

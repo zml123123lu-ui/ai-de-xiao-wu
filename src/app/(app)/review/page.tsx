@@ -17,10 +17,12 @@ const WEEK_LABELS = ["日", "一", "二", "三", "四", "五", "六"];
 export default async function ReviewPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const params = await searchParams;
   const { supabase, user, profile } = await requireUser();
-  const partner = await getPartner(user.id);
   const today = getShanghaiDate();
   const month = isValidMonth(params.month ?? "") ? params.month! : today.slice(0, 7);
   const { start, end } = monthBounds(month);
+  // 注意：这里保持串行。曾经改成 Promise.all 并行，结果"免刷新更新"失灵
+  // （后端已返回新内容，界面却长时间不变）——正确性优先于那 230ms。
+  const partner = await getPartner(user.id);
   const { data } = await supabase
     .from("daily_statuses")
     .select("author_id, status_date, mood")

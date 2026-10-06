@@ -40,6 +40,8 @@ async function relay(request: Request, context: { params: Promise<{ path: string
     init.body = await request.arrayBuffer();
   }
 
+  // 记录到上游的真实耗时，便于区分"网络往返慢"和"服务端渲染慢"
+  const upstreamStarted = Date.now();
   let upstream: Response;
   try {
     upstream = await fetch(`${UPSTREAM.replace(/\/+$/, "")}/${target}${search}`, init);
@@ -54,6 +56,7 @@ async function relay(request: Request, context: { params: Promise<{ path: string
     if (value) out.set(name, value);
   }
   out.set("cache-control", "no-store");
+  out.set("x-relay-upstream-ms", String(Date.now() - upstreamStarted));
   if (request.method === "HEAD") return new NextResponse(null, { status: upstream.status, headers: out });
   return new NextResponse(upstream.body, { status: upstream.status, headers: out });
 }

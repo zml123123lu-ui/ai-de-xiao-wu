@@ -248,7 +248,8 @@ h1, h2, h3, h4, .chip, .row-meta strong { overflow-wrap:anywhere; }
 .letter-body p, .thread-body p { text-indent:2em; }
 .letter-body .sign-off, .thread-body .sign-off { text-indent:0; text-align:right; }
 .status-body small { display:block; margin-top:13px; color:var(--muted); font-size:11.5px; }
-.mood-mark { display:inline-flex; align-items:center; gap:7px; font:14px var(--kai); color:var(--accent); letter-spacing:.1em; }
+/* 心情单独占一行：之前是 inline-flex，正文会紧跟在后面同一行 */
+.mood-mark { display:flex; align-items:center; gap:7px; font:14px var(--kai); color:var(--accent); letter-spacing:.1em; }
 .mood-mark::before { content:""; width:7px; height:7px; border-radius:50%; background:var(--seal); }
 .status-form .button { width:100%; margin-top:4px; }
 .date-nav { display:grid; grid-template-columns:40px 1fr 40px; align-items:center; text-align:center; padding:20px 0 6px; }
