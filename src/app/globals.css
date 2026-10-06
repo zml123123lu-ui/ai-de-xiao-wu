@@ -229,14 +229,14 @@ p { margin:0; }
 h1, h2, h3, h4, .chip, .row-meta strong { overflow-wrap:anywhere; }
 
 .status-body { padding-top:17px; }
-.status-body p { font:17px/2.05 var(--font); white-space:pre-wrap; overflow-wrap:anywhere; }
-.status-body>p:first-of-type { margin-top:11px; }
+.status-body p { font:17px/2.05 var(--font); white-space:pre-wrap; overflow-wrap:anywhere; text-indent:2em; }
+.status-body>p:first-of-type { margin-top:1.5em; }
 .status-body p+p, .thread-body p+p, .letter-body p+p { margin-top:15px; }
 .letter-body p, .thread-body p { text-indent:2em; }
 .letter-body .sign-off, .thread-body .sign-off { text-indent:0; text-align:right; }
-.status-body small { display:block; margin-top:13px; color:var(--muted); font-size:11.5px; }
+.status-body small { display:block; margin-top:13px; color:var(--muted); font-size:11.5px; text-indent:0; }
 /* 心情单独占一行：之前是 inline-flex，正文会紧跟在后面同一行 */
-.mood-mark { display:flex; align-items:center; gap:7px; font:14px var(--font); color:var(--accent); letter-spacing:.1em; }
+.mood-mark { display:flex; align-items:center; gap:7px; font:14px var(--font); color:var(--accent); letter-spacing:.1em; margin-bottom:1.5em; text-indent:0; }
 .mood-mark::before { content:""; width:7px; height:7px; border-radius:50%; background:var(--seal); }
 .status-form .button { width:100%; margin-top:4px; }
 .date-nav { display:grid; grid-template-columns:40px 1fr 40px; align-items:center; text-align:center; padding:20px 0 6px; }
